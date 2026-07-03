@@ -11,6 +11,14 @@ if (!app) {
 }
 
 app.innerHTML = `
+  <nav class="always-search" aria-label="Schnellsuche">
+    <div class="always-search-inner">
+      <input id="sticky-query" type="search" placeholder="Suche jederzeit..." />
+      <button id="sticky-prev" class="ghost" type="button">Zurueck</button>
+      <button id="sticky-next" class="ghost" type="button">Weiter</button>
+    </div>
+  </nav>
+
   <div class="shell">
     <aside class="sidebar">
       <div class="sidebar-head">
@@ -63,6 +71,9 @@ function must<T extends Element>(selector: string): T {
 }
 
 const elements = {
+  stickyQuery: must<HTMLInputElement>('#sticky-query'),
+  stickyPrev: must<HTMLButtonElement>('#sticky-prev'),
+  stickyNext: must<HTMLButtonElement>('#sticky-next'),
   upload: must<HTMLInputElement>('#chat-upload'),
   clearData: must<HTMLButtonElement>('#clear-data'),
   chatList: must<HTMLDivElement>('#chat-list'),
@@ -405,6 +416,7 @@ function wireEvents(): void {
 
   const onFilter = () => {
     state.filters.query = elements.query.value;
+    elements.stickyQuery.value = elements.query.value;
     state.filters.sender = elements.sender.value;
     state.filters.dateFrom = elements.from.value;
     state.filters.dateTo = elements.to.value;
@@ -413,6 +425,10 @@ function wireEvents(): void {
   };
 
   elements.query.addEventListener('input', onFilter);
+  elements.stickyQuery.addEventListener('input', () => {
+    elements.query.value = elements.stickyQuery.value;
+    onFilter();
+  });
   elements.sender.addEventListener('change', onFilter);
   elements.from.addEventListener('change', onFilter);
   elements.to.addEventListener('change', onFilter);
@@ -425,6 +441,7 @@ function wireEvents(): void {
       dateTo: '',
     };
     elements.query.value = '';
+    elements.stickyQuery.value = '';
     elements.sender.value = 'all';
     elements.from.value = '';
     elements.to.value = '';
@@ -434,6 +451,8 @@ function wireEvents(): void {
 
   elements.prev.addEventListener('click', () => cycleMatch(-1));
   elements.next.addEventListener('click', () => cycleMatch(1));
+  elements.stickyPrev.addEventListener('click', () => cycleMatch(-1));
+  elements.stickyNext.addEventListener('click', () => cycleMatch(1));
 
   elements.owner.addEventListener('change', async () => {
     const chat = selectedChat();
@@ -463,6 +482,7 @@ function wireEvents(): void {
     };
 
     elements.query.value = '';
+    elements.stickyQuery.value = '';
     elements.sender.innerHTML = '<option value="all">Alle Absender</option>';
     elements.owner.innerHTML = '<option value="">Waehlen...</option>';
     elements.from.value = '';
@@ -490,6 +510,7 @@ async function bootstrap(): Promise<void> {
   }
 
   updateSearch();
+  elements.stickyQuery.value = elements.query.value;
   render({ scrollToBottom: true });
 }
 

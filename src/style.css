@@ -35,7 +35,34 @@ body {
 
 #app {
   min-height: 100vh;
-  padding: 0;
+  padding: 62px 0 0;
+}
+
+.always-search {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: rgba(8, 11, 18, 0.92);
+  border-bottom: 1px solid #272f3d;
+  backdrop-filter: blur(8px);
+}
+
+.always-search-inner {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  padding: 10px 10px;
+}
+
+.always-search input {
+  border-radius: 10px;
+  border: 1px solid #323b4d;
+  background: #171d29;
+  color: var(--ink);
+  padding: 9px 10px;
 }
 
 .shell {
@@ -403,7 +430,13 @@ mark {
 
 @media (min-width: 981px) {
   #app {
-    padding: 18px;
+    padding: 74px 18px 18px;
+  }
+
+  .always-search-inner {
+    width: min(1240px, 100%);
+    margin: 0 auto;
+    padding: 10px 18px;
   }
 
   .shell {
