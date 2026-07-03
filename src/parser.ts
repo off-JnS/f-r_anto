@@ -172,6 +172,7 @@ export function parseWhatsappText(
         sender,
         text: normalized.text,
         kind: normalized.isSticker ? 'media' : mediaInfo.isMedia ? 'media' : 'text',
+        mediaKey: mediaInfo.mediaName?.toLowerCase(),
         mediaName: mediaInfo.mediaName,
         mediaUrl: mediaRef?.url,
         mediaMime: mediaRef?.mime,

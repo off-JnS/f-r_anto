@@ -8,6 +8,7 @@ export interface ChatMessage {
   sender: string;
   text: string;
   kind: MessageKind;
+  mediaKey?: string;
   mediaName?: string;
   mediaUrl?: string;
   mediaMime?: string;

@@ -267,6 +267,16 @@ button {
     linear-gradient(180deg, #0c1018 0%, #090b11 100%);
 }
 
+.older-button {
+  align-self: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #394155;
+  background: rgba(22, 27, 37, 0.94);
+  color: #d9dff1;
+  font-size: 0.8rem;
+}
+
 .day-divider {
   margin: 10px auto;
   padding: 4px 12px;

@@ -1,8 +1,13 @@
 import './style.css';
 import { importChat } from './importer';
+import { loadMediaPreview } from './mediaStore';
 import { runSearch } from './search';
 import { clearState, loadState, saveState } from './storage';
 import type { ChatData, SearchFilters } from './types';
+
+const MESSAGE_WINDOW_SIZE = 250;
+const SEARCH_CONTEXT_RADIUS = 2;
+const loadingPreviewKeys = new Set<string>();
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -97,6 +102,7 @@ const state: {
   filters: SearchFilters;
   matchedIndexes: number[];
   activeMatch: number;
+  visibleStartIndex: number;
 } = {
   chats: [],
   selectedChatId: null,
@@ -108,6 +114,7 @@ const state: {
   },
   matchedIndexes: [],
   activeMatch: -1,
+  visibleStartIndex: 0,
 };
 
 function escapeHtml(text: string): string {
@@ -229,6 +236,7 @@ function renderChatList(): void {
     button.addEventListener('click', () => {
       state.selectedChatId = chat.id;
       state.activeMatch = -1;
+      resetVisibleWindow(chat);
       buildSenderOptions(chat);
       buildOwnerOptions(chat);
       updateSearch();
@@ -250,8 +258,19 @@ function renderMessages(chat: ChatData | null): void {
   let lastDay = '';
   const activeIndex = state.activeMatch >= 0 ? state.matchedIndexes[state.activeMatch] : -1;
   const matchedSet = new Set<number>(state.matchedIndexes);
+  const rendered = getRenderedIndexes(chat);
 
-  chat.messages.forEach((message, index) => {
+  if (rendered.hiddenOlderCount > 0 && !hasSearchQuery()) {
+    const olderButton = document.createElement('button');
+    olderButton.type = 'button';
+    olderButton.className = 'older-button';
+    olderButton.textContent = `${rendered.hiddenOlderCount} aeltere Nachrichten laden`;
+    olderButton.addEventListener('click', loadOlderMessages);
+    elements.messages.appendChild(olderButton);
+  }
+
+  rendered.indexes.forEach((index) => {
+    const message = chat.messages[index];
     if (message.dayKey !== lastDay) {
       const day = document.createElement('div');
       day.className = 'day-divider';
@@ -306,6 +325,8 @@ function renderMessages(chat: ChatData | null): void {
 
     elements.messages.appendChild(bubble);
   });
+
+  loadVisibleMediaPreviews(chat, rendered.indexes);
 }
 
 function updateSearch(): void {
@@ -337,6 +358,118 @@ function updateMeta(): void {
     : `${state.matchedIndexes.length} Nachrichten nach aktuellen Filtern`;
 }
 
+function hasSearchQuery(): boolean {
+  return Boolean(state.filters.query.trim());
+}
+
+function hasOtherFilters(): boolean {
+  return (
+    state.filters.sender !== 'all' || Boolean(state.filters.dateFrom) || Boolean(state.filters.dateTo)
+  );
+}
+
+function resetVisibleWindow(chat: ChatData | null): void {
+  if (!chat) {
+    state.visibleStartIndex = 0;
+    return;
+  }
+
+  state.visibleStartIndex = Math.max(0, chat.messages.length - MESSAGE_WINDOW_SIZE);
+}
+
+function getRenderedIndexes(chat: ChatData): { indexes: number[]; hiddenOlderCount: number } {
+  if (hasSearchQuery()) {
+    const bucket = new Set<number>();
+
+    for (const matchIndex of state.matchedIndexes) {
+      const start = Math.max(0, matchIndex - SEARCH_CONTEXT_RADIUS);
+      const end = Math.min(chat.messages.length - 1, matchIndex + SEARCH_CONTEXT_RADIUS);
+
+      for (let index = start; index <= end; index += 1) {
+        bucket.add(index);
+      }
+    }
+
+    const indexes = [...bucket].sort((a, b) => a - b);
+    return {
+      indexes,
+      hiddenOlderCount: indexes[0] ?? 0,
+    };
+  }
+
+  if (hasOtherFilters()) {
+    const start = Math.max(0, state.matchedIndexes.length - MESSAGE_WINDOW_SIZE);
+    return {
+      indexes: state.matchedIndexes.slice(start),
+      hiddenOlderCount: start,
+    };
+  }
+
+  const start = Math.max(0, state.visibleStartIndex);
+  const indexes: number[] = [];
+  for (let index = start; index < chat.messages.length; index += 1) {
+    indexes.push(index);
+  }
+
+  return {
+    indexes,
+    hiddenOlderCount: start,
+  };
+}
+
+function loadOlderMessages(): void {
+  const previousHeight = elements.messages.scrollHeight;
+  const previousTop = elements.messages.scrollTop;
+  state.visibleStartIndex = Math.max(0, state.visibleStartIndex - MESSAGE_WINDOW_SIZE);
+  render();
+
+  requestAnimationFrame(() => {
+    const nextHeight = elements.messages.scrollHeight;
+    elements.messages.scrollTop = nextHeight - previousHeight + previousTop;
+  });
+}
+
+function ensureActiveMatchVisible(chat: ChatData | null): void {
+  if (!chat || state.activeMatch < 0 || hasSearchQuery() || hasOtherFilters()) {
+    return;
+  }
+
+  const activeMessageIndex = state.matchedIndexes[state.activeMatch];
+  if (activeMessageIndex < state.visibleStartIndex) {
+    state.visibleStartIndex = Math.max(0, activeMessageIndex - 40);
+  }
+}
+
+function loadVisibleMediaPreviews(chat: ChatData, indexes: number[]): void {
+  for (const index of indexes) {
+    const message = chat.messages[index];
+    if (message.kind !== 'media' || message.mediaUrl || !message.mediaKey) {
+      continue;
+    }
+
+    const loadingKey = `${chat.id}:${message.mediaKey}`;
+    if (loadingPreviewKeys.has(loadingKey)) {
+      continue;
+    }
+
+    loadingPreviewKeys.add(loadingKey);
+
+    void loadMediaPreview(chat.id, message.mediaKey)
+      .then((preview) => {
+        if (!preview) {
+          return;
+        }
+
+        message.mediaUrl = preview.url;
+        message.mediaMime = preview.mime;
+        render();
+      })
+      .finally(() => {
+        loadingPreviewKeys.delete(loadingKey);
+      });
+  }
+}
+
 function scrollMessagesToBottom(): void {
   requestAnimationFrame(() => {
     elements.messages.scrollTop = elements.messages.scrollHeight;
@@ -345,6 +478,7 @@ function scrollMessagesToBottom(): void {
 
 function render(options?: { scrollToBottom?: boolean }): void {
   const chat = selectedChat();
+  ensureActiveMatchVisible(chat);
   renderChatList();
   renderMessages(chat);
   updateMeta();
@@ -397,6 +531,7 @@ async function handleUpload(files: FileList): Promise<void> {
   if (imported.length) {
     state.chats = [...imported, ...state.chats];
     state.selectedChatId = imported[0].id;
+    resetVisibleWindow(imported[0]);
     buildSenderOptions(imported[0]);
     buildOwnerOptions(imported[0]);
     updateSearch();
@@ -512,6 +647,8 @@ async function bootstrap(): Promise<void> {
     buildSenderOptions(selectedChat());
     buildOwnerOptions(selectedChat());
   }
+
+  resetVisibleWindow(selectedChat());
 
   updateSearch();
   elements.stickyQuery.value = elements.query.value;

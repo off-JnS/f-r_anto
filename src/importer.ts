@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { registerChatMedia } from './mediaStore';
 import { parseWhatsappText } from './parser';
 import type { ChatData } from './types';
 
@@ -20,8 +21,8 @@ function getExtension(fileName: string): string {
   return match?.[1] ?? '';
 }
 
-async function buildMediaMap(zip: JSZip): Promise<Map<string, { url: string; mime: string }>> {
-  const mediaMap = new Map<string, { url: string; mime: string }>();
+function buildMediaMap(zip: JSZip): Map<string, { entryName: string; mime: string }> {
+  const mediaMap = new Map<string, { entryName: string; mime: string }>();
 
   for (const entry of Object.values(zip.files)) {
     if (entry.dir) {
@@ -33,13 +34,11 @@ async function buildMediaMap(zip: JSZip): Promise<Map<string, { url: string; mim
       continue;
     }
 
-    const blob = await entry.async('blob');
     const mime = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
-    const url = URL.createObjectURL(blob);
     const fileName = entry.name.split('/').pop()?.toLowerCase();
 
     if (fileName) {
-      mediaMap.set(fileName, { url, mime });
+      mediaMap.set(fileName, { entryName: entry.name, mime });
     }
   }
 
@@ -84,8 +83,13 @@ export async function importChat(file: File): Promise<ChatData> {
   }
 
   const transcript = chooseTranscript(transcripts);
-  const mediaMap = await buildMediaMap(zip);
+  const mediaMap = buildMediaMap(zip);
   const chatName = guessNameFromFile(transcript.name.split('/').pop() ?? file.name);
+  const chat = parseWhatsappText(transcript.content, chatName, new Map());
 
-  return parseWhatsappText(transcript.content, chatName, mediaMap);
+  if (mediaMap.size) {
+    registerChatMedia(chat.id, zip, mediaMap);
+  }
+
+  return chat;
 }
