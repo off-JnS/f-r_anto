@@ -320,19 +320,30 @@ button {
   margin-bottom: 2px;
 }
 
+.text-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px;
+}
+
 .text {
   line-height: 1.32;
   color: #f2eef9;
   font-size: 0.96rem;
+  flex: 1 1 auto;
+  min-width: 40px;
   white-space: normal;
   word-wrap: break-word;
 }
 
 .meta {
-  margin-top: 5px;
-  text-align: right;
+  margin-top: 0;
+  margin-left: auto;
   color: #b9b4c5;
   font-size: 0.72rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .search-match {

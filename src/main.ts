@@ -282,9 +282,11 @@ function renderMessages(chat: ChatData | null): void {
 
     bubble.innerHTML = `
       <div class="sender">${escapeHtml(message.sender)}</div>
-      <div class="text">${highlighted(message.text, state.filters.query)}</div>
+      <div class="text-row">
+        <div class="text">${highlighted(message.text, state.filters.query)}</div>
+        <span class="meta">${message.timestampLabel}</span>
+      </div>
       ${mediaBlock}
-      <div class="meta">${message.timestampLabel}</div>
     `;
 
     elements.messages.appendChild(bubble);
