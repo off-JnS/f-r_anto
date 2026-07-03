@@ -14,37 +14,39 @@ app.innerHTML = `
   <div class="shell">
     <aside class="sidebar">
       <div class="sidebar-head">
-        <h1>Chat Mirror</h1>
-        <p>Upload WhatsApp exports and browse old messages like WhatsApp.</p>
+        <h1>chat mirror für anto</h1>
+        <p>WhatsApp-Exporte hochladen und alte Nachrichten wie in WhatsApp lesen.</p>
       </div>
-      <label class="upload-btn" for="chat-upload">Upload .txt or .zip</label>
+      <label class="upload-btn" for="chat-upload">.txt oder .zip hochladen</label>
       <input id="chat-upload" class="hidden-input" type="file" accept=".txt,.zip" multiple />
-      <button id="clear-data" class="ghost" type="button">Clear local data</button>
+      <button id="clear-data" class="ghost" type="button">Lokale Daten loeschen</button>
       <div id="chat-list" class="chat-list"></div>
-      <p class="privacy-note">All parsing and search run in your browser. No server upload.</p>
+      <p class="privacy-note">Alles bleibt lokal im Browser. Es werden keine Chatdaten hochgeladen.</p>
     </aside>
 
     <main class="main">
       <header class="main-head">
         <div>
-          <h2 id="chat-title">No chat selected</h2>
-          <p id="chat-meta">Upload a WhatsApp export to start.</p>
+          <h2 id="chat-title">Kein Chat ausgewaehlt</h2>
+          <p id="chat-meta">Lade einen WhatsApp-Export hoch, um zu starten.</p>
         </div>
         <div class="search-nav">
-          <button id="prev-result" class="ghost" type="button">Prev</button>
-          <button id="next-result" class="ghost" type="button">Next</button>
+          <label for="owner-select">Ich bin</label>
+          <select id="owner-select" class="ghost"><option value="">Waehlen...</option></select>
+          <button id="prev-result" class="ghost" type="button">Zurueck</button>
+          <button id="next-result" class="ghost" type="button">Weiter</button>
         </div>
       </header>
 
       <section class="search-bar">
-        <input id="search-query" type="search" placeholder="Search older messages..." />
-        <select id="search-sender"><option value="all">All senders</option></select>
+        <input id="search-query" type="search" placeholder="Aeltere Nachrichten suchen..." />
+        <select id="search-sender"><option value="all">Alle Absender</option></select>
         <input id="search-from" type="date" />
         <input id="search-to" type="date" />
-        <button id="search-reset" type="button" class="ghost">Reset</button>
+        <button id="search-reset" type="button" class="ghost">Zuruecksetzen</button>
       </section>
 
-      <div id="result-meta" class="result-meta">No active chat.</div>
+      <div id="result-meta" class="result-meta">Kein aktiver Chat.</div>
       <section id="messages" class="messages"></section>
     </main>
   </div>
@@ -69,6 +71,7 @@ const elements = {
   from: must<HTMLInputElement>('#search-from'),
   to: must<HTMLInputElement>('#search-to'),
   reset: must<HTMLButtonElement>('#search-reset'),
+  owner: must<HTMLSelectElement>('#owner-select'),
   prev: must<HTMLButtonElement>('#prev-result'),
   next: must<HTMLButtonElement>('#next-result'),
   resultMeta: must<HTMLDivElement>('#result-meta'),
@@ -155,7 +158,7 @@ async function persist(): Promise<void> {
 
 function buildSenderOptions(chat: ChatData | null): void {
   const previous = state.filters.sender;
-  elements.sender.innerHTML = '<option value="all">All senders</option>';
+  elements.sender.innerHTML = '<option value="all">Alle Absender</option>';
 
   if (!chat) {
     return;
@@ -173,11 +176,31 @@ function buildSenderOptions(chat: ChatData | null): void {
   }
 }
 
+function buildOwnerOptions(chat: ChatData | null): void {
+  const previousOwner = chat?.owner ?? '';
+  elements.owner.innerHTML = '<option value="">Waehlen...</option>';
+
+  if (!chat) {
+    return;
+  }
+
+  for (const sender of chat.participants) {
+    const option = document.createElement('option');
+    option.value = sender;
+    option.textContent = sender;
+    elements.owner.appendChild(option);
+  }
+
+  if (previousOwner && chat.participants.includes(previousOwner)) {
+    elements.owner.value = previousOwner;
+  }
+}
+
 function renderChatList(): void {
   elements.chatList.innerHTML = '';
 
   if (!state.chats.length) {
-    elements.chatList.innerHTML = '<p class="placeholder">No imported chats yet.</p>';
+    elements.chatList.innerHTML = '<p class="placeholder">Noch keine Chats importiert.</p>';
     return;
   }
 
@@ -188,12 +211,13 @@ function renderChatList(): void {
     button.className = `chat-item ${chat.id === state.selectedChatId ? 'active' : ''}`;
     button.innerHTML = `
       <strong>${escapeHtml(chat.name)}</strong>
-      <span>${chat.messages.length} messages</span>
+      <span>${chat.messages.length} Nachrichten</span>
     `;
     button.addEventListener('click', () => {
       state.selectedChatId = chat.id;
       state.activeMatch = -1;
       buildSenderOptions(chat);
+      buildOwnerOptions(chat);
       updateSearch();
       render();
       void persist();
@@ -206,7 +230,7 @@ function renderMessages(chat: ChatData | null): void {
   elements.messages.innerHTML = '';
 
   if (!chat) {
-    elements.messages.innerHTML = '<div class="empty-state">Upload a file to start viewing messages.</div>';
+    elements.messages.innerHTML = '<div class="empty-state">Datei hochladen, um Nachrichten anzuzeigen.</div>';
     return;
   }
 
@@ -249,7 +273,7 @@ function renderMessages(chat: ChatData | null): void {
         ? `
           <div class="media-chip">
             ${message.mediaUrl ? `<img src="${message.mediaUrl}" alt="${escapeHtml(message.mediaName ?? 'media')}"/>` : ''}
-            <span>${escapeHtml(message.mediaName ?? 'Media')}</span>
+            <span>${escapeHtml(message.mediaName ?? 'Datei')}</span>
           </div>
         `
         : '';
@@ -281,17 +305,17 @@ function updateMeta(): void {
   const chat = selectedChat();
 
   if (!chat) {
-    elements.chatTitle.textContent = 'No chat selected';
-    elements.chatMeta.textContent = 'Upload a WhatsApp export to start.';
-    elements.resultMeta.textContent = 'No active chat.';
+    elements.chatTitle.textContent = 'Kein Chat ausgewaehlt';
+    elements.chatMeta.textContent = 'Lade einen WhatsApp-Export hoch, um zu starten.';
+    elements.resultMeta.textContent = 'Kein aktiver Chat.';
     return;
   }
 
   elements.chatTitle.textContent = chat.name;
-  elements.chatMeta.textContent = `${chat.messages.length} messages • ${chat.participants.length} participants`;
+  elements.chatMeta.textContent = `${chat.messages.length} Nachrichten • ${chat.participants.length} Teilnehmer`;
   elements.resultMeta.textContent = state.filters.query
-    ? `${state.matchedIndexes.length} match(es) for "${state.filters.query}"`
-    : `${state.matchedIndexes.length} messages after current filters`;
+    ? `${state.matchedIndexes.length} Treffer fuer "${state.filters.query}"`
+    : `${state.matchedIndexes.length} Nachrichten nach aktuellen Filtern`;
 }
 
 function render(): void {
@@ -336,7 +360,7 @@ async function handleUpload(files: FileList): Promise<void> {
       const chat = await importChat(file);
       imported.push(chat);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Import failed';
+      const message = error instanceof Error ? error.message : 'Import fehlgeschlagen';
       failures.push(`${file.name}: ${message}`);
     }
   }
@@ -345,13 +369,14 @@ async function handleUpload(files: FileList): Promise<void> {
     state.chats = [...imported, ...state.chats];
     state.selectedChatId = imported[0].id;
     buildSenderOptions(imported[0]);
+    buildOwnerOptions(imported[0]);
     updateSearch();
     render();
     await persist();
   }
 
   if (failures.length) {
-    window.alert(`Some files failed to import:\n${failures.join('\n')}`);
+    window.alert(`Einige Dateien konnten nicht importiert werden:\n${failures.join('\n')}`);
   }
 }
 
@@ -396,8 +421,18 @@ function wireEvents(): void {
   elements.prev.addEventListener('click', () => cycleMatch(-1));
   elements.next.addEventListener('click', () => cycleMatch(1));
 
+  elements.owner.addEventListener('change', async () => {
+    const chat = selectedChat();
+    if (!chat || !elements.owner.value) {
+      return;
+    }
+    chat.owner = elements.owner.value;
+    render();
+    await persist();
+  });
+
   elements.clearData.addEventListener('click', async () => {
-    const ok = window.confirm('Delete all locally saved chats from this browser?');
+    const ok = window.confirm('Alle lokal gespeicherten Chats in diesem Browser loeschen?');
     if (!ok) {
       return;
     }
@@ -414,7 +449,8 @@ function wireEvents(): void {
     };
 
     elements.query.value = '';
-    elements.sender.innerHTML = '<option value="all">All senders</option>';
+    elements.sender.innerHTML = '<option value="all">Alle Absender</option>';
+    elements.owner.innerHTML = '<option value="">Waehlen...</option>';
     elements.from.value = '';
     elements.to.value = '';
 
@@ -436,6 +472,7 @@ async function bootstrap(): Promise<void> {
     }
 
     buildSenderOptions(selectedChat());
+    buildOwnerOptions(selectedChat());
   }
 
   updateSearch();

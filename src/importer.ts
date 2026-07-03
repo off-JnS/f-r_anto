@@ -6,7 +6,7 @@ const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic']);
 
 function guessNameFromFile(fileName: string): string {
   const clean = fileName.replace(/\.[^/.]+$/, '');
-  return clean || 'Imported chat';
+  return clean || 'Importierter Chat';
 }
 
 function scoreWhatsappText(text: string): number {
@@ -63,7 +63,7 @@ export async function importChat(file: File): Promise<ChatData> {
   }
 
   if (!file.name.toLowerCase().endsWith('.zip')) {
-    throw new Error('Unsupported file type. Use .txt or .zip exports.');
+    throw new Error('Dateityp nicht unterstuetzt. Bitte .txt oder .zip verwenden.');
   }
 
   const zip = await JSZip.loadAsync(file);
@@ -72,7 +72,7 @@ export async function importChat(file: File): Promise<ChatData> {
   );
 
   if (!textEntries.length) {
-    throw new Error('No .txt transcript found in zip file.');
+    throw new Error('Keine .txt-Chatdatei in der .zip-Datei gefunden.');
   }
 
   const transcripts: Array<{ name: string; content: string }> = [];

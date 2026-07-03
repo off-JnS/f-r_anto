@@ -101,12 +101,25 @@ function timestampLabel(timestampMs: number): string {
 }
 
 function dayKey(timestampMs: number): string {
-  return new Date(timestampMs).toLocaleDateString();
+  return new Date(timestampMs).toLocaleDateString('de-DE');
+}
+
+function normalizeBody(body: string): { text: string; isSticker: boolean } {
+  const trimmed = body.trim();
+  const stickerPattern = /(?:<sticker omitted>|sticker omitted|\bstk-[\w\-]+\.(?:webp|png)\b)/i;
+
+  if (stickerPattern.test(trimmed)) {
+    return { text: 'sticker', isSticker: true };
+  }
+
+  return { text: trimmed, isSticker: false };
 }
 
 function detectMedia(text: string): { mediaName?: string; isMedia: boolean } {
-  const filenameMatch = text.match(/([\w\-(). ]+\.(?:jpg|jpeg|png|gif|webp|heic|mp4|mov|opus|mp3|m4a|pdf|docx?|xlsx?|pptx?))/i);
-  const omitted = /<media omitted>|omitted/i.test(text);
+  const filenameMatch = text.match(
+    /([\w\-(). ]+\.(?:jpg|jpeg|png|gif|webp|heic|mp4|mov|opus|mp3|m4a|pdf|docx?|xlsx?|pptx?))/i,
+  );
+  const omitted = /<media omitted>|media omitted/i.test(text);
 
   return {
     mediaName: filenameMatch?.[1]?.trim(),
@@ -115,16 +128,8 @@ function detectMedia(text: string): { mediaName?: string; isMedia: boolean } {
 }
 
 function inferOwner(messages: ChatMessage[]): string {
-  const counts = new Map<string, number>();
-  for (const message of messages) {
-    if (message.kind === 'system') {
-      continue;
-    }
-    counts.set(message.sender, (counts.get(message.sender) ?? 0) + 1);
-  }
-
-  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  return sorted[0]?.[0] ?? 'You';
+  const firstUserMessage = messages.find((message) => message.kind !== 'system');
+  return firstUserMessage?.sender ?? 'Ich';
 }
 
 export function parseWhatsappText(
@@ -136,22 +141,25 @@ export function parseWhatsappText(
   const messages: ChatMessage[] = [];
 
   for (const line of lines) {
-    if (!line.trim()) {
+    const cleanedLine = line.replace(/[\u200E\u200F\u202A-\u202E]/g, '');
+
+    if (!cleanedLine.trim()) {
       continue;
     }
 
     let matched = false;
 
     for (const pattern of LINE_PATTERNS) {
-      const result = line.match(pattern);
+      const result = cleanedLine.match(pattern);
       if (!result) {
         continue;
       }
 
       const [, datePart, timePart, senderRaw, body] = result;
       const sender = senderRaw.trim();
+      const normalized = normalizeBody(body);
       const timestampMs = parseTimestamp(datePart, timePart);
-      const mediaInfo = detectMedia(body);
+      const mediaInfo = detectMedia(normalized.text);
       const mediaRef = mediaInfo.mediaName
         ? mediaLookup.get(mediaInfo.mediaName.toLowerCase())
         : undefined;
@@ -162,8 +170,8 @@ export function parseWhatsappText(
         timestampLabel: timestampLabel(timestampMs),
         dayKey: dayKey(timestampMs),
         sender,
-        text: body.trim(),
-        kind: mediaInfo.isMedia ? 'media' : 'text',
+        text: normalized.text,
+        kind: normalized.isSticker ? 'text' : mediaInfo.isMedia ? 'media' : 'text',
         mediaName: mediaInfo.mediaName,
         mediaUrl: mediaRef?.url,
         mediaMime: mediaRef?.mime,
@@ -178,7 +186,7 @@ export function parseWhatsappText(
     }
 
     for (const pattern of SYSTEM_PATTERNS) {
-      const result = line.match(pattern);
+      const result = cleanedLine.match(pattern);
       if (!result) {
         continue;
       }
@@ -202,7 +210,7 @@ export function parseWhatsappText(
 
     if (!matched && messages.length) {
       const previous = messages[messages.length - 1];
-      previous.text = `${previous.text}\n${line}`;
+      previous.text = `${previous.text}\n${cleanedLine}`;
     }
   }
 
