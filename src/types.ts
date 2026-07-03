@@ -1,5 +1,7 @@
 export type MessageKind = 'text' | 'system' | 'media';
 
+export type MediaType = 'image' | 'sticker' | 'video' | 'audio' | 'document' | 'unknown';
+
 export interface ChatMessage {
   id: string;
   timestampMs: number;
@@ -8,10 +10,9 @@ export interface ChatMessage {
   sender: string;
   text: string;
   kind: MessageKind;
+  mediaType?: MediaType;
   mediaKey?: string;
   mediaName?: string;
-  mediaUrl?: string;
-  mediaMime?: string;
 }
 
 export interface ChatData {
@@ -32,4 +33,12 @@ export interface SearchFilters {
 
 export interface SearchResult {
   indexes: number[];
+}
+
+export interface MediaRecord {
+  chatId: string;
+  key: string;
+  name: string;
+  mime: string;
+  blob: Blob;
 }

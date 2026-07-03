@@ -1,19 +1,44 @@
 import JSZip from 'jszip';
-import { registerChatMedia } from './mediaStore';
+import { persistZipMedia } from './mediaStore';
 import { parseWhatsappText } from './parser';
 import type { ChatData } from './types';
 
-const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic']);
+const MEDIA_MIMES: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  '3gp': 'video/3gpp',
+  opus: 'audio/ogg',
+  ogg: 'audio/ogg',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  wav: 'audio/wav',
+  pdf: 'application/pdf',
+};
+
+export type ImportProgress =
+  | { stage: 'reading' }
+  | { stage: 'parsing' }
+  | { stage: 'media'; done: number; total: number };
 
 function guessNameFromFile(fileName: string): string {
-  const clean = fileName.replace(/\.[^/.]+$/, '');
+  const clean = fileName
+    .replace(/\.[^/.]+$/, '')
+    .replace(/^WhatsApp Chat (?:mit|with) /i, '');
   return clean || 'Importierter Chat';
 }
 
 function scoreWhatsappText(text: string): number {
   const sample = text.split(/\r?\n/).slice(0, 200);
-  const starter = /^(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}),\s\d{1,2}:\d{2}/;
-  return sample.reduce((acc, line) => (starter.test(line) ? acc + 1 : acc), 0);
+  const starter = /^\[?(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}),?\s\d{1,2}:\d{2}/;
+  return sample.reduce((acc, line) => (starter.test(line.replace(/^[\u200E\u200F\uFEFF]+/, '')) ? acc + 1 : acc), 0);
 }
 
 function getExtension(fileName: string): string {
@@ -29,14 +54,12 @@ function buildMediaMap(zip: JSZip): Map<string, { entryName: string; mime: strin
       continue;
     }
 
-    const extension = getExtension(entry.name);
-    if (!IMAGE_EXTENSIONS.has(extension)) {
+    const mime = MEDIA_MIMES[getExtension(entry.name)];
+    if (!mime) {
       continue;
     }
 
-    const mime = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
     const fileName = entry.name.split('/').pop()?.toLowerCase();
-
     if (fileName) {
       mediaMap.set(fileName, { entryName: entry.name, mime });
     }
@@ -55,14 +78,24 @@ function chooseTranscript(files: Array<{ name: string; content: string }>): { na
   );
 }
 
-export async function importChat(file: File): Promise<ChatData> {
+export async function importChat(
+  file: File,
+  onProgress?: (progress: ImportProgress) => void,
+): Promise<ChatData> {
+  onProgress?.({ stage: 'reading' });
+
   if (file.name.toLowerCase().endsWith('.txt')) {
     const content = await file.text();
-    return parseWhatsappText(content, guessNameFromFile(file.name), new Map());
+    onProgress?.({ stage: 'parsing' });
+    const chat = parseWhatsappText(content, guessNameFromFile(file.name));
+    if (!chat.messages.length) {
+      throw new Error('Keine Nachrichten erkannt. Ist das ein WhatsApp-Export?');
+    }
+    return chat;
   }
 
   if (!file.name.toLowerCase().endsWith('.zip')) {
-    throw new Error('Dateityp nicht unterstuetzt. Bitte .txt oder .zip verwenden.');
+    throw new Error('Dateityp nicht unterstützt. Bitte .txt oder .zip verwenden.');
   }
 
   const zip = await JSZip.loadAsync(file);
@@ -82,13 +115,21 @@ export async function importChat(file: File): Promise<ChatData> {
     });
   }
 
+  onProgress?.({ stage: 'parsing' });
   const transcript = chooseTranscript(transcripts);
-  const mediaMap = buildMediaMap(zip);
   const chatName = guessNameFromFile(transcript.name.split('/').pop() ?? file.name);
-  const chat = parseWhatsappText(transcript.content, chatName, new Map());
+  const chat = parseWhatsappText(transcript.content, chatName);
 
+  if (!chat.messages.length) {
+    throw new Error('Keine Nachrichten erkannt. Ist das ein WhatsApp-Export?');
+  }
+
+  const mediaMap = buildMediaMap(zip);
   if (mediaMap.size) {
-    registerChatMedia(chat.id, zip, mediaMap);
+    onProgress?.({ stage: 'media', done: 0, total: mediaMap.size });
+    await persistZipMedia(chat.id, zip, mediaMap, (done, total) => {
+      onProgress?.({ stage: 'media', done, total });
+    });
   }
 
   return chat;

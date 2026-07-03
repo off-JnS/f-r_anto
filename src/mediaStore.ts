@@ -1,57 +1,115 @@
-import JSZip from 'jszip';
+import type JSZip from 'jszip';
+import { getMedia, putMediaBatch } from './storage';
+import type { MediaRecord } from './types';
 
-interface MediaSource {
-  entryName: string;
+interface MediaPreview {
+  url: string;
   mime: string;
 }
 
-interface RuntimeMediaStore {
-  zip: JSZip;
-  entries: Map<string, MediaSource>;
-  cache: Map<string, string>;
+// Object URLs pin blobs in memory, so keep a bounded LRU and revoke evicted
+// entries; the blob itself stays in IndexedDB and reloads on demand.
+const MAX_CACHED_URLS = 80;
+const PERSIST_BATCH_SIZE = 16;
+
+const urlCache = new Map<string, MediaPreview>();
+
+function cacheKey(chatId: string, mediaKey: string): string {
+  return `${chatId}/${mediaKey}`;
 }
 
-const chatMedia = new Map<string, RuntimeMediaStore>();
+function rememberUrl(key: string, preview: MediaPreview): void {
+  urlCache.set(key, preview);
 
-export function registerChatMedia(
-  chatId: string,
-  zip: JSZip,
-  entries: Map<string, MediaSource>,
-): void {
-  chatMedia.set(chatId, {
-    zip,
-    entries,
-    cache: new Map(),
-  });
+  while (urlCache.size > MAX_CACHED_URLS) {
+    const oldestKey = urlCache.keys().next().value as string;
+    const oldest = urlCache.get(oldestKey);
+    urlCache.delete(oldestKey);
+    if (oldest) {
+      URL.revokeObjectURL(oldest.url);
+    }
+  }
+}
+
+export function getCachedPreview(chatId: string, mediaKey: string): MediaPreview | null {
+  const key = cacheKey(chatId, mediaKey);
+  const cached = urlCache.get(key);
+  if (!cached) {
+    return null;
+  }
+
+  // Refresh LRU position.
+  urlCache.delete(key);
+  urlCache.set(key, cached);
+  return cached;
 }
 
 export async function loadMediaPreview(
   chatId: string,
   mediaKey: string,
-): Promise<{ url: string; mime: string } | null> {
-  const store = chatMedia.get(chatId);
-  if (!store) {
-    return null;
-  }
-
-  const source = store.entries.get(mediaKey);
-  if (!source) {
-    return null;
-  }
-
-  const cached = store.cache.get(mediaKey);
+): Promise<MediaPreview | null> {
+  const cached = getCachedPreview(chatId, mediaKey);
   if (cached) {
-    return { url: cached, mime: source.mime };
+    return cached;
   }
 
-  const zipEntry = store.zip.file(source.entryName);
-  if (!zipEntry) {
+  const record = await getMedia(chatId, mediaKey);
+  if (!record) {
     return null;
   }
 
-  const blob = await zipEntry.async('blob');
-  const url = URL.createObjectURL(blob);
-  store.cache.set(mediaKey, url);
+  const preview: MediaPreview = {
+    url: URL.createObjectURL(record.blob),
+    mime: record.mime,
+  };
+  rememberUrl(cacheKey(chatId, mediaKey), preview);
+  return preview;
+}
 
-  return { url, mime: source.mime };
+export function releaseChatPreviews(chatId: string): void {
+  const prefix = `${chatId}/`;
+  for (const [key, preview] of urlCache) {
+    if (key.startsWith(prefix)) {
+      urlCache.delete(key);
+      URL.revokeObjectURL(preview.url);
+    }
+  }
+}
+
+export async function persistZipMedia(
+  chatId: string,
+  zip: JSZip,
+  entries: Map<string, { entryName: string; mime: string }>,
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
+  const total = entries.size;
+  let done = 0;
+  let batch: MediaRecord[] = [];
+
+  for (const [mediaKey, source] of entries) {
+    const zipEntry = zip.file(source.entryName);
+    if (!zipEntry) {
+      done += 1;
+      continue;
+    }
+
+    const blob = await zipEntry.async('blob');
+    batch.push({
+      chatId,
+      key: mediaKey,
+      name: source.entryName.split('/').pop() ?? mediaKey,
+      mime: source.mime,
+      blob,
+    });
+
+    done += 1;
+    onProgress?.(done, total);
+
+    if (batch.length >= PERSIST_BATCH_SIZE) {
+      await putMediaBatch(batch);
+      batch = [];
+    }
+  }
+
+  await putMediaBatch(batch);
 }
