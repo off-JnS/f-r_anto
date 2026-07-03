@@ -150,8 +150,15 @@ button {
 
 .main {
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
+  grid-template-rows: auto 1fr;
   min-height: 0;
+  overflow: hidden;
+}
+
+.top-tools {
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .main-head {

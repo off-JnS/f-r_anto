@@ -25,28 +25,30 @@ app.innerHTML = `
     </aside>
 
     <main class="main">
-      <header class="main-head">
-        <div>
-          <h2 id="chat-title">Kein Chat ausgewaehlt</h2>
-          <p id="chat-meta">Lade einen WhatsApp-Export hoch, um zu starten.</p>
-        </div>
-        <div class="search-nav">
-          <label for="owner-select">Ich bin</label>
-          <select id="owner-select" class="ghost"><option value="">Waehlen...</option></select>
-          <button id="prev-result" class="ghost" type="button">Zurueck</button>
-          <button id="next-result" class="ghost" type="button">Weiter</button>
-        </div>
-      </header>
+      <div class="top-tools">
+        <header class="main-head">
+          <div>
+            <h2 id="chat-title">Kein Chat ausgewaehlt</h2>
+            <p id="chat-meta">Lade einen WhatsApp-Export hoch, um zu starten.</p>
+          </div>
+          <div class="search-nav">
+            <label for="owner-select">Ich bin</label>
+            <select id="owner-select" class="ghost"><option value="">Waehlen...</option></select>
+            <button id="prev-result" class="ghost" type="button">Zurueck</button>
+            <button id="next-result" class="ghost" type="button">Weiter</button>
+          </div>
+        </header>
 
-      <section class="search-bar">
-        <input id="search-query" type="search" placeholder="Aeltere Nachrichten suchen..." />
-        <select id="search-sender"><option value="all">Alle Absender</option></select>
-        <input id="search-from" type="date" />
-        <input id="search-to" type="date" />
-        <button id="search-reset" type="button" class="ghost">Zuruecksetzen</button>
-      </section>
+        <section class="search-bar">
+          <input id="search-query" type="search" placeholder="Aeltere Nachrichten suchen..." />
+          <select id="search-sender"><option value="all">Alle Absender</option></select>
+          <input id="search-from" type="date" />
+          <input id="search-to" type="date" />
+          <button id="search-reset" type="button" class="ghost">Zuruecksetzen</button>
+        </section>
 
-      <div id="result-meta" class="result-meta">Kein aktiver Chat.</div>
+        <div id="result-meta" class="result-meta">Kein aktiver Chat.</div>
+      </div>
       <section id="messages" class="messages"></section>
     </main>
   </div>
@@ -219,7 +221,7 @@ function renderChatList(): void {
       buildSenderOptions(chat);
       buildOwnerOptions(chat);
       updateSearch();
-      render();
+      render({ scrollToBottom: true });
       void persist();
     });
     elements.chatList.appendChild(button);
@@ -318,11 +320,21 @@ function updateMeta(): void {
     : `${state.matchedIndexes.length} Nachrichten nach aktuellen Filtern`;
 }
 
-function render(): void {
+function scrollMessagesToBottom(): void {
+  requestAnimationFrame(() => {
+    elements.messages.scrollTop = elements.messages.scrollHeight;
+  });
+}
+
+function render(options?: { scrollToBottom?: boolean }): void {
   const chat = selectedChat();
   renderChatList();
   renderMessages(chat);
   updateMeta();
+
+  if (options?.scrollToBottom) {
+    scrollMessagesToBottom();
+  }
 }
 
 function jumpToActiveMatch(): void {
@@ -371,7 +383,7 @@ async function handleUpload(files: FileList): Promise<void> {
     buildSenderOptions(imported[0]);
     buildOwnerOptions(imported[0]);
     updateSearch();
-    render();
+    render({ scrollToBottom: true });
     await persist();
   }
 
@@ -476,7 +488,7 @@ async function bootstrap(): Promise<void> {
   }
 
   updateSearch();
-  render();
+  render({ scrollToBottom: true });
 }
 
 void bootstrap();
