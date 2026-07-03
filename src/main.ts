@@ -281,24 +281,28 @@ function renderMessages(chat: ChatData | null): void {
     bubble.className = classes.join(' ');
     bubble.id = `msg-${index}`;
 
-    const mediaBlock =
-      message.kind === 'media'
-        ? `
-          <div class="media-chip">
-            ${message.mediaUrl ? `<img src="${message.mediaUrl}" alt="${escapeHtml(message.mediaName ?? 'media')}"/>` : ''}
-            <span>${escapeHtml(message.mediaName ?? 'Datei')}</span>
-          </div>
-        `
-        : '';
-
-    bubble.innerHTML = `
-      <div class="sender">${escapeHtml(message.sender)}</div>
-      <div class="text-row">
-        <div class="text">${highlighted(message.text, state.filters.query)}</div>
-        <span class="meta">${message.timestampLabel}</span>
-      </div>
-      ${mediaBlock}
-    `;
+    if (message.kind === 'media') {
+      const isSticker = message.text.toLowerCase() === 'sticker';
+      bubble.innerHTML = `
+        <div class="sender">${escapeHtml(message.sender)}</div>
+        <div class="media-chip ${isSticker ? 'sticker' : ''}">
+          ${message.mediaUrl
+            ? `<img src="${message.mediaUrl}" alt="${isSticker ? 'Sticker Vorschau' : 'Datei Vorschau'}"/>`
+            : '<div class="media-empty" aria-label="Keine Vorschau verfuegbar"></div>'}
+        </div>
+        <div class="media-meta-row">
+          <span class="meta">${message.timestampLabel}</span>
+        </div>
+      `;
+    } else {
+      bubble.innerHTML = `
+        <div class="sender">${escapeHtml(message.sender)}</div>
+        <div class="text-row">
+          <div class="text">${highlighted(message.text, state.filters.query)}</div>
+          <span class="meta">${message.timestampLabel}</span>
+        </div>
+      `;
+    }
 
     elements.messages.appendChild(bubble);
   });

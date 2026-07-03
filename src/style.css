@@ -392,19 +392,39 @@ mark {
   margin-top: 7px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 9px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.14);
+  justify-content: center;
+  width: 132px;
+  height: 132px;
+  padding: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  font-size: 0.82rem;
+  overflow: hidden;
+}
+
+.media-chip.sticker {
+  width: 110px;
+  height: 110px;
 }
 
 .media-chip img {
-  width: 42px;
-  height: 42px;
-  border-radius: 9px;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+}
+
+.media-empty {
+  width: calc(100% - 10px);
+  height: calc(100% - 10px);
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.24);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+
+.media-meta-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
 }
 
 .empty-state {

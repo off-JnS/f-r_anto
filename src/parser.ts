@@ -159,7 +159,7 @@ export function parseWhatsappText(
       const sender = senderRaw.trim();
       const normalized = normalizeBody(body);
       const timestampMs = parseTimestamp(datePart, timePart);
-      const mediaInfo = detectMedia(normalized.text);
+      const mediaInfo = detectMedia(body);
       const mediaRef = mediaInfo.mediaName
         ? mediaLookup.get(mediaInfo.mediaName.toLowerCase())
         : undefined;
@@ -171,7 +171,7 @@ export function parseWhatsappText(
         dayKey: dayKey(timestampMs),
         sender,
         text: normalized.text,
-        kind: normalized.isSticker ? 'text' : mediaInfo.isMedia ? 'media' : 'text',
+        kind: normalized.isSticker ? 'media' : mediaInfo.isMedia ? 'media' : 'text',
         mediaName: mediaInfo.mediaName,
         mediaUrl: mediaRef?.url,
         mediaMime: mediaRef?.mime,
