@@ -35,6 +35,41 @@ function guessNameFromFile(fileName: string): string {
   return clean || 'Importierter Chat';
 }
 
+function normalizeName(name: string): string {
+  return name
+    .trim()
+    .replace(/^_+/, '')
+    .replace(/_+$/, '')
+    .replace(/\s+/g, ' ');
+}
+
+function isGenericChatName(name: string): boolean {
+  const normalized = normalizeName(name).toLowerCase();
+  return normalized === 'chat' || normalized === 'importierter chat';
+}
+
+function participantBasedName(participants: string[]): string {
+  const unique = Array.from(
+    new Set(participants.map((name) => name.trim()).filter((name) => Boolean(name))),
+  );
+
+  if (!unique.length) {
+    return 'Importierter Chat';
+  }
+
+  if (unique.length === 1) {
+    return unique[0];
+  }
+
+  return unique.join('-');
+}
+
+function resolveChatName(chat: ChatData, preferredName: string): string {
+  return isGenericChatName(preferredName)
+    ? participantBasedName(chat.participants)
+    : preferredName;
+}
+
 function scoreWhatsappText(text: string): number {
   const sample = text.split(/\r?\n/).slice(0, 200);
   const starter = /^\[?(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}),?\s\d{1,2}:\d{2}/;
@@ -87,7 +122,9 @@ export async function importChat(
   if (file.name.toLowerCase().endsWith('.txt')) {
     const content = await file.text();
     onProgress?.({ stage: 'parsing' });
-    const chat = parseWhatsappText(content, guessNameFromFile(file.name));
+    const preferredName = guessNameFromFile(file.name);
+    const chat = parseWhatsappText(content, preferredName);
+    chat.name = resolveChatName(chat, preferredName);
     if (!chat.messages.length) {
       throw new Error('Keine Nachrichten erkannt. Ist das ein WhatsApp-Export?');
     }
@@ -117,8 +154,9 @@ export async function importChat(
 
   onProgress?.({ stage: 'parsing' });
   const transcript = chooseTranscript(transcripts);
-  const chatName = guessNameFromFile(transcript.name.split('/').pop() ?? file.name);
-  const chat = parseWhatsappText(transcript.content, chatName);
+  const preferredName = guessNameFromFile(transcript.name.split('/').pop() ?? file.name);
+  const chat = parseWhatsappText(transcript.content, preferredName);
+  chat.name = resolveChatName(chat, preferredName);
 
   if (!chat.messages.length) {
     throw new Error('Keine Nachrichten erkannt. Ist das ein WhatsApp-Export?');

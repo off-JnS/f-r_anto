@@ -194,6 +194,39 @@ function initials(name: string): string {
   return (first + second).toUpperCase();
 }
 
+function normalizeDisplayName(name: string): string {
+  return name
+    .trim()
+    .replace(/^_+/, '')
+    .replace(/_+$/, '')
+    .replace(/\s+/g, ' ');
+}
+
+function isGenericChatName(name: string): boolean {
+  const normalized = normalizeDisplayName(name).toLowerCase();
+  return normalized === 'chat' || normalized === 'importierter chat';
+}
+
+function participantDisplayName(chat: ChatData): string {
+  const unique = Array.from(
+    new Set(chat.participants.map((name) => name.trim()).filter((name) => Boolean(name))),
+  );
+
+  if (unique.length > 1) {
+    return unique.join('-');
+  }
+
+  if (unique.length === 1) {
+    return unique[0];
+  }
+
+  return normalizeDisplayName(chat.name) || 'Chat';
+}
+
+function chatDisplayName(chat: ChatData): string {
+  return isGenericChatName(chat.name) ? participantDisplayName(chat) : chat.name;
+}
+
 function selectedChat(): ChatData | null {
   return state.chats.find((chat) => chat.id === state.selectedChatId) ?? null;
 }
@@ -492,13 +525,14 @@ function renderHomeChatList(): void {
 
   for (const chat of sorted) {
     const lastMessage = chat.messages[chat.messages.length - 1];
+    const displayName = chatDisplayName(chat);
     const item = document.createElement('div');
     item.className = 'chat-item';
     item.innerHTML = `
-      <div class="avatar" style="background:${senderColor(chat.name)}">${escapeHtml(initials(chat.name))}</div>
+      <div class="avatar" style="background:${senderColor(displayName)}">${escapeHtml(initials(displayName))}</div>
       <div class="chat-item-body">
         <div class="chat-item-top">
-          <strong>${escapeHtml(chat.name)}</strong>
+          <strong>${escapeHtml(displayName)}</strong>
           <span class="chat-item-time">${lastMessage ? listTimeLabel(lastMessage.timestampMs) : ''}</span>
         </div>
         <div class="chat-item-bottom">
@@ -538,9 +572,10 @@ function buildOwnerOptions(chat: ChatData | null): void {
 }
 
 function updateChatHeader(chat: ChatData): void {
-  elements.chatTitle.textContent = chat.name;
-  elements.chatAvatar.textContent = initials(chat.name);
-  elements.chatAvatar.style.background = senderColor(chat.name);
+  const displayName = chatDisplayName(chat);
+  elements.chatTitle.textContent = displayName;
+  elements.chatAvatar.textContent = initials(displayName);
+  elements.chatAvatar.style.background = senderColor(displayName);
 
   const others = chat.participants.filter((participant) => participant !== chat.owner);
   elements.chatMeta.textContent = others.length
@@ -648,7 +683,7 @@ async function openChat(chatId: string): Promise<void> {
 }
 
 async function removeChat(chat: ChatData): Promise<void> {
-  const ok = window.confirm(`Chat "${chat.name}" und zugehörige Medien löschen?`);
+  const ok = window.confirm(`Chat "${chatDisplayName(chat)}" und zugehörige Medien löschen?`);
   if (!ok) {
     return;
   }
